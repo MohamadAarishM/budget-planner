@@ -1,0 +1,21 @@
+{
+  "name": "personal-budget-planner",
+  "version": "1.0.0",
+  "description": "Responsive personal budget planner with Express, SQLite, and Flux-inspired dashboard UI",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "python-server": "python3 server.py"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "sqlite3": "^5.1.7"
+  },
+  "keywords": ["budget", "finance", "student-planner", "sqlite", "express"],
+  "author": "Mohamad Aarish",
+  "license": "MIT"
+}
