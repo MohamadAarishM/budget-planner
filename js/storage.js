@@ -133,11 +133,11 @@ class StorageManager {
         localStorage.setItem(this.getUserDataKey(userId, 'settings'), JSON.stringify({
           ...INITIAL_SETTINGS,
           userName: 'Mohamad Aarish',
-          userEmail: 'mohamadaarish.m@budget.app'
+          userEmail: 'mohamadaarish.m@budgetnest.app'
         }));
       } else {
         const user = this.getUsers().find(u => u.id === userId);
-        this.initializeNewUserData(userId, user ? user.name : 'User', user ? user.email : 'user@budget.app');
+        this.initializeNewUserData(userId, user ? user.name : 'User', user ? user.email : 'user@budgetnest.app');
       }
     }
   }

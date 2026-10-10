@@ -48,7 +48,7 @@ class BudgetApp {
     const accountsList = document.getElementById('dropdownAccountsList');
 
     const name = user.name || 'Mohamad Aarish';
-    const email = user.email || 'mohamadaarish.m@budget.app';
+    const email = user.email || 'mohamadaarish.m@budgetnest.app';
     const initials = user.avatar || name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 
     if (nameEl) nameEl.textContent = name;

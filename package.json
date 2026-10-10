@@ -1,7 +1,7 @@
 {
-  "name": "personal-budget-planner",
+  "name": "budgetnest",
   "version": "1.0.0",
-  "description": "Responsive personal budget planner with Express, SQLite, and Flux-inspired dashboard UI",
+  "description": "BudgetNest: Responsive personal budget and wealth planner with client-side storage, SQLite sync, and modern UI",
   "main": "src/server.js",
   "type": "module",
   "scripts": {

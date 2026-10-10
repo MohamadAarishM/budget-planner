@@ -3,8 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Personal Budget Planner — Financial Overview</title>
-  <meta name="description" content="A student-ready responsive budgeting app designed for clear monthly financial planning, transaction tracking, and category spending control.">
+  <title>BudgetNest — Personal Budget & Finance Planner</title>
+  <meta name="description" content="BudgetNest: A responsive, modern personal budgeting application designed for clear monthly financial planning, transaction tracking, and category spending control.">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="assets/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -19,11 +22,7 @@
     <aside class="sidebar" aria-label="Main Navigation">
       <div>
         <div class="sidebar-brand">
-          <div class="brand-icon">⚡</div>
-          <div>
-            <div class="brand-text">flux<span style="color: var(--lime-primary);">.</span></div>
-            <div class="brand-sub">Budget Planner</div>
-          </div>
+          <img src="assets/budgetnest-horizontal-darkbg.png" alt="BudgetNest" class="sidebar-brand-logo">
         </div>
 
         <nav class="sidebar-nav">
@@ -69,6 +68,11 @@
     <!-- MAIN DASHBOARD CANVAS -->
     <main class="main-canvas" id="mainContent">
       
+      <!-- Mobile Top Brand Header -->
+      <div class="mobile-brand-header">
+        <img src="assets/budgetnest-horizontal.png" alt="BudgetNest" class="mobile-logo-img">
+      </div>
+
       <!-- TOP NAVIGATION BAR -->
       <header class="top-bar">
         <!-- User Profile Chip & Dropdown -->
@@ -303,9 +307,10 @@
   <!-- AUTHENTICATION / LOGIN & SIGNUP MODAL -->
   <div class="modal-overlay" id="authModalOverlay" role="dialog" aria-modal="true">
     <div class="modal-container" style="max-width: 480px;">
-      <div class="modal-header">
-        <h3 class="modal-title" id="authModalTitle">Sign in to your Budget Planner</h3>
-        <button class="modal-close-btn" id="closeAuthModalBtn">✕</button>
+      <div class="modal-header" style="flex-direction: column; align-items: center; text-align: center; position: relative; padding-bottom: 8px;">
+        <img src="assets/budgetnest-horizontal.png" alt="BudgetNest" style="height: 40px; margin-bottom: 8px; object-fit: contain;">
+        <h3 class="modal-title" id="authModalTitle">Welcome to BudgetNest</h3>
+        <button class="modal-close-btn" id="closeAuthModalBtn" style="position: absolute; right: 16px; top: 16px;">✕</button>
       </div>
       <div class="modal-body">
         <!-- Auth Tabs: Sign in vs Register -->
@@ -318,7 +323,7 @@
         <form id="signInForm">
           <div class="form-group">
             <label class="form-label" for="loginEmail">Email Address</label>
-            <input type="email" class="form-control" id="loginEmail" placeholder="e.g. mohamadaarish.m@budget.app" required>
+            <input type="email" class="form-control" id="loginEmail" placeholder="e.g. mohamadaarish.m@budgetnest.app" required>
           </div>
           <div class="form-group">
             <label class="form-label" for="loginPassword">Password</label>

@@ -115,8 +115,33 @@ body {
 .sidebar-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px 28px 14px;
+  padding: 8px 12px 24px 12px;
+}
+
+.sidebar-brand-logo {
+  height: 44px;
+  width: auto;
+  max-width: 195px;
+  object-fit: contain;
+  transition: transform var(--transition-fast);
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.25));
+}
+
+.sidebar-brand-logo:hover {
+  transform: scale(1.03);
+}
+
+.mobile-brand-header {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 0 16px 0;
+}
+
+.mobile-logo-img {
+  height: 38px;
+  width: auto;
+  object-fit: contain;
 }
 
 .brand-icon {
@@ -2095,6 +2120,9 @@ body {
     max-height: none;
   }
   .mobile-bottom-nav {
+    display: flex;
+  }
+  .mobile-brand-header {
     display: flex;
   }
   .modern-table {

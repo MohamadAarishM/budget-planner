@@ -1,5 +1,5 @@
 /**
- * Seed data for Personal Budget Planner
+ * Seed data for BudgetNest
  * All currency values are stored as integer minor units (paise).
  * ₹1 = 100 paise.
  * October 2026 reference dataset.
@@ -21,7 +21,7 @@ export const DEFAULT_USERS = [
   {
     id: 'user_aarish',
     name: 'Mohamad Aarish',
-    email: 'mohamadaarish.m@budget.app',
+    email: 'mohamadaarish.m@budgetnest.app',
     password: 'password123',
     currencyCode: 'INR',
     currencySymbol: '₹',
@@ -30,7 +30,7 @@ export const DEFAULT_USERS = [
   {
     id: 'user_sarah',
     name: 'Sarah Jenkins',
-    email: 'sarah.j@budget.app',
+    email: 'sarah.j@budgetnest.app',
     password: 'password123',
     currencyCode: 'INR',
     currencySymbol: '₹',
@@ -39,7 +39,7 @@ export const DEFAULT_USERS = [
   {
     id: 'user_priya',
     name: 'Priya Sharma',
-    email: 'priya.s@budget.app',
+    email: 'priya.s@budgetnest.app',
     password: 'password123',
     currencyCode: 'INR',
     currencySymbol: '₹',
@@ -52,7 +52,7 @@ export const INITIAL_SETTINGS = {
   currencySymbol: '₹',
   weekStart: 'monday',
   userName: 'Mohamad Aarish',
-  userEmail: 'mohamadaarish.m@budget.app',
+  userEmail: 'mohamadaarish.m@budgetnest.app',
   defaultMonth: '2026-10',
   startingBalanceMinor: 5000000 // ₹50,000 opening account balance
 };

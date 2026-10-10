@@ -1,20 +1,27 @@
-# Personal Budget Planner ⚡
+# BudgetNest 🪺
 
-A responsive, browser-based personal budgeting web application built with modern aesthetics inspired by the **Nixtio / Flux** dark-slate and vibrant lime design system.
+<p align="center">
+  <img src="assets/budgetnest-logo.png" alt="BudgetNest Logo" width="380">
+  <br>
+  <strong>A modern, responsive personal budget and wealth planner designed to nurture your financial health.</strong>
+  <br><br>
+  <a href="https://mohamadaarishm.github.io/budget-planner/"><strong>🌐 View Live Website</strong></a>
+</p>
 
 ---
 
 ## 🌟 Key Features
 
 1. **Dashboard (`/`)**
-   - **Header & Greeting:** "Good morning, Mohamad Aarish", unified October 2026 month picker, global "+ Add Transaction" act   - **5 Summary Cards:**
+   - **Header & Greeting:** "Good morning, Mohamad Aarish", unified October 2026 month picker, global "+ Add Transaction" action.
+   - **5 Summary Cards:**
      - **Monthly Budget:** ₹50,000 (Target set by user)
      - **Income:** ₹47,000 (₹42,000 salary + ₹5,000 freelance, `+5% MoM`)
      - **Expenses:** ₹19,280 (Sum of October expense records)
      - **Budget left:** ₹30,720 (`Monthly budget − expenses`)
      - **Net this month:** +₹27,720 (`Income − expenses`, monthly surplus)
    - **Account Balance Strip:** Displays true account balance (₹77,720 = Starting Balance ₹50,000 + Net this month ₹27,720) with interactive Starting Balance setup.
-   - **Flux Overlapping Bubbles Visual:** Circular visualization comparing Income (purple bubble), Expenses (dark bubble), and Budget Left (neon lime bubble) alongside key category micro-progress bars.
+   - **Cash Flow Bubbles:** Circular visualization comparing Income (purple bubble), Expenses (dark bubble), and Budget Left (neon lime bubble) alongside key category micro-progress bars.
    - **Dark Accent Runway Card:** Obsidian night card featuring Budget remaining (**₹30,720**), progress (**38.6%**), and a textured daily spending runway bar chart highlighting peak spending days (e.g. Oct 2 rent, groceries, bills) in neon lime.
    - **Category Spending & Recent Activity:** Direct category breakdown and the latest 5 transactions with instant category-filtered navigation.
 
@@ -60,9 +67,9 @@ A responsive, browser-based personal budgeting web application built with modern
    - Seamless authentication modal supporting **Sign In** and **Create Account**.
    - Isolated per-user storage: each user maintains their own transactions, budget limits, salary, and categories.
    - Quick 1-click demo accounts switchable directly from the top-bar profile dropdown:
-     - **Mohamad Aarish** (`mohamadaarish.m@budget.app`) - Full October 2026 reference seed dataset.
-     - **Sarah Jenkins** (`sarah.j@budget.app`) - Starter personal budget.
-     - **Priya Sharma** (`priya.s@budget.app`) - Independent student budget.
+     - **Mohamad Aarish** (`mohamadaarish.m@budgetnest.app`) - Full October 2026 reference seed dataset.
+     - **Sarah Jenkins** (`sarah.j@budgetnest.app`) - Starter personal budget.
+     - **Priya Sharma** (`priya.s@budgetnest.app`) - Independent student budget.
 
 7. **Salary & Income Editing**
    - Dedicated **Edit Monthly Salary** modal accessible directly from:
