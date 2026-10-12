@@ -66,7 +66,16 @@ class BudgetApp {
     }
   }
 
+  handleSignOut() {
+    storage.logout();
+    this.updateUserProfileHeader();
+    this.renderCurrentPage();
+    this.showToast('You have been signed out successfully.', 'info');
+    this.openAuthModal('signin');
+  }
+
   updateUserProfileHeader() {
+    const isLoggedIn = storage.isLoggedIn();
     const user = storage.getCurrentUser();
     const nameEl = document.getElementById('userProfileName');
     const emailEl = document.getElementById('userProfileEmail');
@@ -76,24 +85,41 @@ class BudgetApp {
     const dropdownName = document.getElementById('dropdownUserName');
     const dropdownEmail = document.getElementById('dropdownUserEmail');
     const accountsList = document.getElementById('dropdownAccountsList');
+    const logoutBtn = document.getElementById('dropdownLogoutBtn');
 
-    const name = user.name || 'Mohamad Aarish';
-    const email = user.email || 'mohamadaarish.m@budgetnest.app';
-    const initials = user.avatar || name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+    if (!isLoggedIn) {
+      if (nameEl) nameEl.textContent = 'Sign In';
+      if (emailEl) emailEl.textContent = 'Not signed in';
+      if (avatarEl) avatarEl.textContent = '👤';
+      if (chip) chip.setAttribute('title', 'You are signed out. Click to sign in');
 
-    if (nameEl) nameEl.textContent = name;
-    if (emailEl) emailEl.textContent = email;
-    if (avatarEl) avatarEl.textContent = initials;
-    if (chip) chip.setAttribute('title', `${name} (${email}) - Click to switch`);
+      if (dropdownName) dropdownName.textContent = 'Not Signed In';
+      if (dropdownEmail) dropdownEmail.textContent = 'Sign in or switch account';
+      if (logoutBtn) {
+        logoutBtn.innerHTML = `<span>🔑</span><span>Sign In</span>`;
+      }
+    } else {
+      const name = user.name || 'Mohamad Aarish';
+      const email = user.email || 'mohamadaarish.m@budgetnest.app';
+      const initials = user.avatar || name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 
-    if (dropdownName) dropdownName.textContent = name;
-    if (dropdownEmail) dropdownUserEmail.textContent = email;
+      if (nameEl) nameEl.textContent = name;
+      if (emailEl) emailEl.textContent = email;
+      if (avatarEl) avatarEl.textContent = initials;
+      if (chip) chip.setAttribute('title', `${name} (${email}) - Click to switch or sign out`);
+
+      if (dropdownName) dropdownName.textContent = name;
+      if (dropdownEmail) dropdownEmail.textContent = email;
+      if (logoutBtn) {
+        logoutBtn.innerHTML = `<span>🚪</span><span>Sign out</span>`;
+      }
+    }
 
     // Render accounts list in dropdown
     if (accountsList) {
       const allUsers = storage.getUsers();
       accountsList.innerHTML = allUsers.map(u => {
-        const isActive = u.id === user.id;
+        const isActive = isLoggedIn && u.id === user.id;
         return `
           <button class="dropdown-item ${isActive ? 'active-account' : ''} switch-account-btn" data-user-id="${u.id}">
             <div class="user-avatar" style="width: 24px; height: 24px; font-size: 10px;">${u.avatar || u.name[0]}</div>
@@ -107,14 +133,12 @@ class BudgetApp {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           const targetUserId = btn.getAttribute('data-user-id');
-          if (targetUserId !== user.id) {
-            const switchedUser = storage.setCurrentUser(targetUserId);
-            const menu = document.getElementById('profileDropdownMenu');
-            if (menu) menu.classList.remove('active');
-            this.updateUserProfileHeader();
-            this.renderCurrentPage();
-            this.showToast(`Switched account to ${switchedUser.name}`, 'success');
-          }
+          const switchedUser = storage.setCurrentUser(targetUserId);
+          const menu = document.getElementById('profileDropdownMenu');
+          if (menu) menu.classList.remove('active');
+          this.updateUserProfileHeader();
+          this.renderCurrentPage();
+          this.showToast(`Switched account to ${switchedUser.name}`, 'success');
         });
       });
     }
@@ -128,6 +152,10 @@ class BudgetApp {
     if (profileChip && profileMenu) {
       profileChip.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (!storage.isLoggedIn()) {
+          this.openAuthModal('signin');
+          return;
+        }
         profileMenu.classList.toggle('active');
       });
 
@@ -150,7 +178,11 @@ class BudgetApp {
     if (logoutBtn) {
       logoutBtn.addEventListener('click', () => {
         if (profileMenu) profileMenu.classList.remove('active');
-        this.openAuthModal('signin');
+        if (storage.isLoggedIn()) {
+          this.handleSignOut();
+        } else {
+          this.openAuthModal('signin');
+        }
       });
     }
 
@@ -338,14 +370,34 @@ class BudgetApp {
       <!-- Hero Header -->
       <section class="page-hero">
         <div>
-          <h1 class="page-title">Good morning, ${storage.getSettings().userName || 'Mohamad Aarish'}</h1>
-          <p class="page-subtitle">Here is how your money is tracking for ${monthName}.</p>
+          <h1 class="page-title">Good morning, ${storage.isLoggedIn() ? (storage.getSettings().userName || 'Mohamad Aarish') : 'Guest'}</h1>
+          <p class="page-subtitle">${storage.isLoggedIn() ? `Here is how your money is tracking for ${monthName}.` : `You are currently signed out. Sign in or choose a demo profile to manage your finances.`}</p>
         </div>
         <div class="period-pill-badge">
           <span class="active-indicator"></span>
           <span>Period: ${monthName}</span>
         </div>
       </section>
+
+      ${!storage.isLoggedIn() ? `
+      <!-- Signed-out Alert Banner -->
+      <section style="background: linear-gradient(135deg, #1E293B, #0F172A); border: 1px solid #334155; border-radius: 14px; padding: 18px 24px; margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; color: #FFFFFF; box-shadow: var(--shadow-card);">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 22px;">
+            🔒
+          </div>
+          <div>
+            <div style="font-size: 16px; font-weight: 800;">You are currently signed out</div>
+            <div style="font-size: 13px; color: #94A3B8; margin-top: 2px;">Sign in with your email or choose a demo profile to track your personal budget and wealth.</div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn-primary-action" id="dashBannerSignInBtn" style="padding: 9px 18px; font-size: 13px;">
+            🔑 Sign In / Choose Account
+          </button>
+        </div>
+      </section>
+      ` : ''}
 
       <!-- 5 Summary Cards (Row) -->
       <section class="summary-cards-row" aria-label="Monthly Totals">
@@ -614,6 +666,11 @@ class BudgetApp {
     const viewAllCats = document.getElementById('viewAllCategoriesBtn');
     if (viewAllCats) {
       viewAllCats.addEventListener('click', () => this.navigateTo('budgets'));
+    }
+
+    const bannerSignInBtn = document.getElementById('dashBannerSignInBtn');
+    if (bannerSignInBtn) {
+      bannerSignInBtn.addEventListener('click', () => this.openAuthModal('signin'));
     }
 
     const dashAddBtn = document.getElementById('dashAddFirstTxnBtn');
@@ -1258,10 +1315,18 @@ class BudgetApp {
         <div class="settings-row">
           <div class="settings-info">
             <h4>Active Profile</h4>
-            <p>Currently logged in as <strong>${storage.getCurrentUser().name}</strong> (${storage.getCurrentUser().email}).</p>
+            <p>${storage.isLoggedIn() 
+              ? `Currently logged in as <strong>${storage.getCurrentUser().name}</strong> (${storage.getCurrentUser().email}).` 
+              : 'Currently <strong>Not Signed In</strong> (Guest Mode).'}</p>
           </div>
           <div style="display: flex; gap: 8px;">
-            <button class="promo-btn" style="width: auto; padding: 6px 14px;" id="settingsSwitchAccountBtn">Switch User / Login</button>
+            <button class="promo-btn" style="width: auto; padding: 6px 14px;" id="settingsSwitchAccountBtn">
+              ${storage.isLoggedIn() ? 'Switch User / Login' : '🔑 Sign In'}
+            </button>
+            ${storage.isLoggedIn() ? `
+            <button class="promo-btn" style="width: auto; padding: 6px 14px; background: #EF4444; color: #FFFFFF;" id="settingsSignOutBtn">
+              🚪 Sign Out
+            </button>` : ''}
           </div>
         </div>
 
@@ -1462,6 +1527,11 @@ class BudgetApp {
 
     const switchBtn = document.getElementById('settingsSwitchAccountBtn');
     if (switchBtn) switchBtn.addEventListener('click', () => this.openAuthModal());
+
+    const settingsSignOutBtn = document.getElementById('settingsSignOutBtn');
+    if (settingsSignOutBtn) {
+      settingsSignOutBtn.addEventListener('click', () => this.handleSignOut());
+    }
 
     const editSalaryBtn = document.getElementById('settingsEditSalaryBtn');
     if (editSalaryBtn) editSalaryBtn.addEventListener('click', () => this.openSalaryModal());
@@ -2024,6 +2094,11 @@ class BudgetApp {
     const quickList = document.getElementById('quickDemoUsersList');
     const loginError = document.getElementById('loginErrorMsg');
     const registerError = document.getElementById('registerErrorMsg');
+    const modalTitle = document.getElementById('authModalTitle');
+
+    if (modalTitle) {
+      modalTitle.textContent = storage.isLoggedIn() ? 'Switch / Manage Account' : 'Sign In to BudgetNest';
+    }
 
     if (loginError) loginError.style.display = 'none';
     if (registerError) registerError.style.display = 'none';

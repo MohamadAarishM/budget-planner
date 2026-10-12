@@ -6,6 +6,14 @@
 
 import { INITIAL_CATEGORIES, INITIAL_SETTINGS, INITIAL_BUDGETS, INITIAL_TRANSACTIONS, DEFAULT_USERS } from './data.js';
 
+export const GUEST_USER = {
+  id: 'guest_user',
+  name: 'Not Signed In',
+  email: 'Click to Sign In',
+  avatar: '👤',
+  isGuest: true
+};
+
 const STORAGE_KEYS = {
   USERS: 'pbp_users_v2',
   CURRENT_USER: 'pbp_current_user_v2',
@@ -31,10 +39,17 @@ class StorageManager {
       this.saveUsers(users);
     }
 
-    // Initialize current user
+    // Initialize current user with persistent auth status
     let currentUserId = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
-    if (!currentUserId || !users.some(u => u.id === currentUserId)) {
+    const authStatus = localStorage.getItem('pbp_auth_status');
+
+    if (authStatus === 'logged_out' || currentUserId === 'guest_user') {
+      currentUserId = 'guest_user';
+      localStorage.setItem('pbp_auth_status', 'logged_out');
+      localStorage.setItem(STORAGE_KEYS.CURRENT_USER, 'guest_user');
+    } else if (!currentUserId || !users.some(u => u.id === currentUserId)) {
       currentUserId = 'user_aarish';
+      localStorage.setItem('pbp_auth_status', 'logged_in');
       localStorage.setItem(STORAGE_KEYS.CURRENT_USER, currentUserId);
     }
 
@@ -197,16 +212,29 @@ class StorageManager {
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
   }
 
+  isLoggedIn() {
+    const authStatus = localStorage.getItem('pbp_auth_status');
+    const currentId = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
+    return authStatus !== 'logged_out' && Boolean(currentId && currentId !== 'guest_user');
+  }
+
   getCurrentUser() {
+    if (!this.isLoggedIn()) {
+      return GUEST_USER;
+    }
     const users = this.getUsers();
-    const currentId = localStorage.getItem(STORAGE_KEYS.CURRENT_USER) || 'user_aarish';
+    const currentId = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
     return users.find(u => u.id === currentId) || users[0] || DEFAULT_USERS[0];
   }
 
   setCurrentUser(userId) {
+    if (userId === 'guest_user') {
+      return this.logout();
+    }
     const users = this.getUsers();
     const user = users.find(u => u.id === userId);
     if (!user) throw new Error('User not found');
+    localStorage.setItem('pbp_auth_status', 'logged_in');
     localStorage.setItem(STORAGE_KEYS.CURRENT_USER, userId);
     this.ensureUserData(userId);
     return user;
@@ -219,6 +247,7 @@ class StorageManager {
     if (!user) {
       throw new Error('Invalid email or password.');
     }
+    localStorage.setItem('pbp_auth_status', 'logged_in');
     this.setCurrentUser(user.id);
     return user;
   }
@@ -252,14 +281,16 @@ class StorageManager {
 
     // Initialize clean starter data for new user
     this.initializeNewUserData(newUser.id, cleanName, cleanEmail);
+    localStorage.setItem('pbp_auth_status', 'logged_in');
     this.setCurrentUser(newUser.id);
     return newUser;
   }
 
   logout() {
-    // Keep user list intact, switch to default or signal logged-out
-    // We can allow guest/login screen prompt
-    return true;
+    localStorage.setItem('pbp_auth_status', 'logged_out');
+    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, 'guest_user');
+    this.ensureUserData('guest_user');
+    return GUEST_USER;
   }
 
   // --- PER-USER DATA STORAGE ---
@@ -269,6 +300,20 @@ class StorageManager {
 
   ensureUserData(userId) {
     const txKey = this.getUserDataKey(userId, 'transactions');
+    if (userId === 'guest_user') {
+      if (!localStorage.getItem(txKey)) {
+        localStorage.setItem(txKey, JSON.stringify([]));
+        localStorage.setItem(this.getUserDataKey(userId, 'budgets'), JSON.stringify({}));
+        localStorage.setItem(this.getUserDataKey(userId, 'categories'), JSON.stringify(INITIAL_CATEGORIES));
+        localStorage.setItem(this.getUserDataKey(userId, 'settings'), JSON.stringify({
+          ...INITIAL_SETTINGS,
+          userName: 'Not Signed In',
+          userEmail: 'Click to Sign In',
+          startingBalanceMinor: 0
+        }));
+      }
+      return;
+    }
     if (!localStorage.getItem(txKey)) {
       if (userId === 'user_aarish') {
         // Use reference seed data for Mohamad Aarish
