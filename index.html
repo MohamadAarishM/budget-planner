@@ -117,6 +117,12 @@
 
         <!-- Controls: Search, Month, Add Transaction -->
         <div class="top-controls">
+          <!-- SQLite Database Status Pill -->
+          <div class="db-status-pill connected" id="sqliteStatusBadge" title="SQLite Database: budget.db">
+            <span class="db-dot"></span>
+            <span class="db-label" id="sqliteStatusText">SQLite: budget.db</span>
+          </div>
+
           <button class="search-pill-btn" id="globalSearchBtn" aria-label="Search records">
             <span>🔍</span>
             <span>Search records...</span>

@@ -102,27 +102,59 @@
 
 ---
 
+## 🗄️ SQLite Database Integration (`budget.db`)
+
+BudgetNest is powered by an embedded **SQLite 3** relational database (`budget.db`). All financial transactions, monthly target budgets, category limits, user profiles, and regional settings persist directly to disk.
+
+### SQLite Schema Architecture
+- **`transactions`**: Stores transaction records (`id`, `date`, `description`, `category_id`, `type`, `amount_minor`, `user_id`, `created_at`, `updated_at`).
+- **`monthly_budgets`**: Stores monthly spending targets per period (`month`, `monthly_budget_minor`, `user_id`).
+- **`category_budgets`**: Stores granular spending limits per category per month (`month`, `category_id`, `limit_minor`, `user_id`).
+- **`categories`**: Stores customizable income and expense categories (`id`, `name`, `type`, `icon`, `color`).
+- **`settings`**: Stores regional currency preferences, starting account balance (`starting_balance_minor`), week start day, and defaults.
+- **`users`**: Stores authentication and user profile data (`id`, `name`, `email`, `avatar`, `created_at`).
+
+### Features of the SQLite Integration
+- **Zero-Config Embedded Engine:** Uses the native Python `sqlite3` driver. No external database servers or services needed.
+- **Real-Time Database Inspector:** The Settings page includes a live SQLite Inspector displaying engine version (SQLite 3.51.0), database file path, file size on disk, and real-time row counts for all tables.
+- **Top Bar Status Indicator:** A live green status pill (`🟢 SQLite: budget.db`) in the header confirms active database persistence.
+- **Optimistic UI with Fallback:** Frontend queries update instantly with zero lag while syncing to SQLite in the background. On static hosting (e.g. GitHub Pages), the application automatically falls back to browser `localStorage`.
+- **Sync & Reset Tools:** One-click synchronization (`Sync to SQLite`), pull latest data (`Pull from SQLite`), and database reset tools in Settings.
+
+---
+
 ## 🚀 Running the Application
 
-### 1. Python REST API & SQLite Server (Active)
-The built-in server runs on Python 3 and includes the `/api/v1` REST endpoints and SQLite database persistence:
+### 1. Python REST API & SQLite Server (Recommended)
+Run the built-in server to activate real-time SQLite database persistence:
 ```bash
 python3 server.py
 ```
 Open **[http://localhost:8000](http://localhost:8000)** in your browser.
 
-### 2. Direct Browser Viewing
-You can also open `index.html` directly in any modern web browser. The app runs fully client-side with complete `localStorage` persistence and automatic seed data initialization.
+### 2. Static Hosting (e.g. GitHub Pages)
+BudgetNest is fully compatible with static hosts like GitHub Pages. When the Python SQLite backend is not running, the client automatically defaults to browser `localStorage` caching so the web app remains 100% operational everywhere.
 
 ---
 
-## 🗄️ Backend REST API (`/api/v1`)
+## 📡 Backend REST API (`/api/v1`)
 
 - `GET /api/v1/health` — Service health check
+- `GET /api/v1/db/info` — SQLite database engine info, file size, and live table counts
+- `POST /api/v1/db/sync` — Synchronize complete bundle of transactions, budgets, and settings
+- `POST /api/v1/db/reset` — Reset SQLite database to initial schema and seed data
 - `GET /api/v1/transactions` — Query transactions with filtering and pagination
-- `POST /api/v1/transactions` — Create new income/expense record
-- `DELETE /api/v1/transactions/:id` — Delete transaction
-- `GET /api/v1/budgets/:month` — Fetch monthly & category budgets
+- `POST /api/v1/transactions` — Create new income/expense record in SQLite
+- `PUT /api/v1/transactions/:id` — Update existing transaction in SQLite
+- `DELETE /api/v1/transactions/:id` — Delete transaction from SQLite
+- `GET /api/v1/budgets/:month` — Fetch monthly & category budgets from SQLite
+- `PUT /api/v1/budgets/:month` — Update monthly budget target in SQLite
+- `PUT /api/v1/budgets/:month/categories/:id` — Update category spending limit in SQLite
+- `GET /api/v1/categories` — List all categories from SQLite
+- `POST /api/v1/categories` — Add new category to SQLite
+- `DELETE /api/v1/categories/:id` — Remove category from SQLite
+- `GET /api/v1/settings` — Get current user settings from SQLite
+- `PUT /api/v1/settings` — Update currency and starting account balance in SQLite
 - `GET /api/v1/reports/summary?month=2026-10` — Calculate mathematical aggregates
 - `GET /api/v1/reports/by-category?month=2026-10` — Expense breakdown by category
 - `GET /api/v1/export?format=csv|json` — Export financial records

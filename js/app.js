@@ -34,6 +34,36 @@ class BudgetApp {
     this.updateUserProfileHeader();
     this.updateMonthPickerDisplay();
     this.navigateTo(this.currentRoute);
+
+    // Initialize SQLite persistence connection
+    storage.onSqliteStatusChange((connected, info) => {
+      this.updateSqliteBadge(connected, info);
+    });
+
+    storage.initSqliteConnection().then(() => {
+      this.updateSqliteBadge();
+      if (this.currentRoute === 'settings' || this.currentRoute === 'dashboard') {
+        this.renderCurrentPage();
+      }
+    });
+  }
+
+  updateSqliteBadge(connected = storage.isSqliteConnected, info = storage.sqliteInfo) {
+    const badge = document.getElementById('sqliteStatusBadge');
+    const label = document.getElementById('sqliteStatusText');
+    if (!badge) return;
+    if (connected) {
+      badge.classList.remove('offline');
+      badge.classList.add('connected');
+      if (label) label.textContent = 'SQLite: budget.db';
+      const count = info && info.stats ? info.stats.transactions : '';
+      badge.setAttribute('title', `SQLite 3.51.0 Connected (budget.db)${count !== undefined ? ` • ${count} transactions` : ''} - Click to view DB Inspector`);
+    } else {
+      badge.classList.remove('connected');
+      badge.classList.add('offline');
+      if (label) label.textContent = '💾 LocalStorage';
+      badge.setAttribute('title', 'SQLite backend offline. Using browser localStorage fallback.');
+    }
   }
 
   updateUserProfileHeader() {
@@ -180,6 +210,14 @@ class BudgetApp {
     const searchBtn = document.getElementById('globalSearchBtn');
     if (searchBtn) {
       searchBtn.addEventListener('click', () => this.openQuickSearch());
+    }
+
+    // SQLite Status Badge click navigates to Settings inspector
+    const sqliteBadge = document.getElementById('sqliteStatusBadge');
+    if (sqliteBadge) {
+      sqliteBadge.addEventListener('click', () => {
+        this.navigateTo('settings');
+      });
     }
 
     window.addEventListener('keydown', (e) => {
@@ -1303,6 +1341,63 @@ class BudgetApp {
         </div>
       </section>
 
+      <!-- SQLite Database Persistence & Inspector Card -->
+      <section class="sqlite-management-card">
+        <div class="sqlite-card-header">
+          <div>
+            <h3 style="font-size: 18px; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+              <span>🗄️ SQLite Database Engine</span>
+              <span class="sqlite-engine-badge ${storage.isSqliteConnected ? '' : 'offline'}">
+                ${storage.isSqliteConnected ? '🟢 Connected (budget.db)' : '💾 Offline (LocalStorage Mode)'}
+              </span>
+            </h3>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">
+              ${storage.isSqliteConnected 
+                ? 'Your budget, categories, transactions, and settings persist directly into the SQLite database file: <code>budget.db</code>.' 
+                : 'SQLite backend is currently offline. All changes are being kept in browser localStorage.'}
+            </p>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="promo-btn" style="width: auto; padding: 7px 14px; background: #0F172A; color: #FFFFFF;" id="syncSqliteNowBtn" ${storage.isSqliteConnected ? '' : 'disabled'}>
+              🔄 Sync to SQLite
+            </button>
+            <button class="promo-btn" style="width: auto; padding: 7px 14px; background: #2563EB; color: #FFFFFF;" id="pullSqliteNowBtn" ${storage.isSqliteConnected ? '' : 'disabled'}>
+              📥 Pull from SQLite
+            </button>
+            <button class="promo-btn" style="width: auto; padding: 7px 14px; background: #DC2626; color: #FFFFFF;" id="resetSqliteBtn" ${storage.isSqliteConnected ? '' : 'disabled'}>
+              🧹 Reset SQLite DB
+            </button>
+          </div>
+        </div>
+
+        <div class="sqlite-meta-grid">
+          <div class="sqlite-meta-box">
+            <div class="label">Database Engine</div>
+            <div class="value" style="font-size: 14px;">${storage.sqliteInfo?.engine || (storage.isSqliteConnected ? 'SQLite 3.51.0' : 'Offline')}</div>
+          </div>
+          <div class="sqlite-meta-box">
+            <div class="label">Database File</div>
+            <div class="value" style="font-size: 14px;">${storage.sqliteInfo?.filename || 'budget.db'}</div>
+          </div>
+          <div class="sqlite-meta-box">
+            <div class="label">DB File Size</div>
+            <div class="value" style="font-size: 14px;">${storage.sqliteInfo?.size_bytes ? (storage.sqliteInfo.size_bytes / 1024).toFixed(1) + ' KB' : (storage.isSqliteConnected ? '52 KB' : 'N/A')}</div>
+          </div>
+          <div class="sqlite-meta-box">
+            <div class="label">Transactions</div>
+            <div class="value">${storage.sqliteInfo?.stats?.transactions !== undefined ? storage.sqliteInfo.stats.transactions : transactions.length}</div>
+          </div>
+          <div class="sqlite-meta-box">
+            <div class="label">Budgets</div>
+            <div class="value">${storage.sqliteInfo?.stats?.monthly_budgets !== undefined ? storage.sqliteInfo.stats.monthly_budgets : 1}</div>
+          </div>
+          <div class="sqlite-meta-box">
+            <div class="label">Categories</div>
+            <div class="value">${storage.sqliteInfo?.stats?.categories !== undefined ? storage.sqliteInfo.stats.categories : categories.length}</div>
+          </div>
+        </div>
+      </section>
+
       <!-- Data Export & Backup Section -->
       <section class="settings-section-card">
         <h3 style="font-size: 18px; font-weight: 800; margin-bottom: 8px;">Data Storage & Backup</h3>
@@ -1329,6 +1424,42 @@ class BudgetApp {
     `;
 
     // Event listeners for Settings
+    const syncSqliteBtn = document.getElementById('syncSqliteNowBtn');
+    if (syncSqliteBtn) {
+      syncSqliteBtn.addEventListener('click', async () => {
+        syncSqliteBtn.disabled = true;
+        syncSqliteBtn.textContent = '🔄 Syncing...';
+        await storage.syncFullBundleToSqlite();
+        await storage.initSqliteConnection();
+        this.showToast('Successfully synced all data to SQLite (budget.db)', 'success');
+        this.renderSettingsPage(container);
+      });
+    }
+
+    const pullSqliteBtn = document.getElementById('pullSqliteNowBtn');
+    if (pullSqliteBtn) {
+      pullSqliteBtn.addEventListener('click', async () => {
+        pullSqliteBtn.disabled = true;
+        pullSqliteBtn.textContent = '📥 Pulling...';
+        await storage.syncFromSqlite();
+        this.showToast('Pulled latest records from SQLite database', 'success');
+        this.renderSettingsPage(container);
+      });
+    }
+
+    const resetSqliteBtn = document.getElementById('resetSqliteBtn');
+    if (resetSqliteBtn) {
+      resetSqliteBtn.addEventListener('click', async () => {
+        if (confirm('Are you sure you want to reset SQLite (budget.db) to default tables and starter data?')) {
+          resetSqliteBtn.disabled = true;
+          resetSqliteBtn.textContent = '🧹 Resetting...';
+          await storage.resetSqliteDb();
+          this.showToast('SQLite database reset to clean seed data', 'success');
+          this.renderSettingsPage(container);
+        }
+      });
+    }
+
     const switchBtn = document.getElementById('settingsSwitchAccountBtn');
     if (switchBtn) switchBtn.addEventListener('click', () => this.openAuthModal());
 

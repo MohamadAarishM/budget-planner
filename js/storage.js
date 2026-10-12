@@ -20,6 +20,10 @@ class StorageManager {
   }
 
   init() {
+    this.isSqliteConnected = false;
+    this.sqliteInfo = null;
+    this.listeners = [];
+
     // Initialize users list if not present
     let users = this.getUsers();
     if (!users || users.length === 0) {
@@ -36,6 +40,147 @@ class StorageManager {
 
     // Ensure current user's dataset is initialized
     this.ensureUserData(currentUserId);
+
+    // Initialize connection to SQLite backend (budget.db)
+    this.initSqliteConnection();
+  }
+
+  onSqliteStatusChange(cb) {
+    if (typeof cb === 'function') {
+      this.listeners.push(cb);
+      cb({ isConnected: this.isSqliteConnected, info: this.sqliteInfo });
+    }
+  }
+
+  notifySqliteStatus() {
+    this.listeners.forEach(cb => {
+      try {
+        cb({ isConnected: this.isSqliteConnected, info: this.sqliteInfo });
+      } catch (err) {
+        console.warn('SQLite listener error:', err);
+      }
+    });
+  }
+
+  async initSqliteConnection() {
+    try {
+      const res = await fetch('/api/v1/db/info');
+      if (res.ok) {
+        const json = await res.json();
+        this.isSqliteConnected = true;
+        this.sqliteInfo = json.data || {};
+        await this.syncFromSqlite();
+        this.notifySqliteStatus();
+        return true;
+      }
+    } catch {
+      // Backend not running (e.g. running on static GitHub Pages)
+    }
+    this.isSqliteConnected = false;
+    this.sqliteInfo = null;
+    this.notifySqliteStatus();
+    return false;
+  }
+
+  async syncFromSqlite() {
+    if (!this.isSqliteConnected) return;
+    try {
+      // Fetch latest transactions from SQLite budget.db
+      const txRes = await fetch('/api/v1/transactions');
+      if (txRes.ok) {
+        const json = await txRes.json();
+        if (json.data && Array.isArray(json.data) && json.data.length > 0) {
+          const mapped = json.data.map(t => ({
+            id: t.id,
+            date: t.date,
+            description: t.description,
+            categoryId: t.category_id || t.categoryId,
+            type: t.type,
+            amountMinor: t.amount_minor !== undefined ? t.amount_minor : t.amountMinor,
+            createdAt: t.created_at || t.createdAt
+          }));
+          this.saveTransactions(mapped, false);
+        }
+      }
+
+      // Fetch categories from SQLite
+      const catRes = await fetch('/api/v1/categories');
+      if (catRes.ok) {
+        const json = await catRes.json();
+        if (json.data && Array.isArray(json.data) && json.data.length > 0) {
+          this.saveCategories(json.data, false);
+        }
+      }
+
+      // Fetch settings from SQLite
+      const setRes = await fetch('/api/v1/settings');
+      if (setRes.ok) {
+        const json = await setRes.json();
+        if (json.data) {
+          this.saveSettings(json.data, false);
+        }
+      }
+
+      // Refresh DB info
+      const infoRes = await fetch('/api/v1/db/info');
+      if (infoRes.ok) {
+        const json = await infoRes.json();
+        this.sqliteInfo = json.data || {};
+        this.notifySqliteStatus();
+      }
+    } catch (err) {
+      console.warn('Sync from SQLite error:', err);
+    }
+  }
+
+  async pushToSqlite(endpoint, method, payload) {
+    if (!this.isSqliteConnected) return null;
+    try {
+      const res = await fetch(endpoint, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: payload ? JSON.stringify(payload) : undefined
+      });
+      if (res.ok) {
+        // Refresh db info stats
+        fetch('/api/v1/db/info')
+          .then(r => r.json())
+          .then(data => {
+            this.sqliteInfo = data.data || {};
+            this.notifySqliteStatus();
+          })
+          .catch(() => {});
+        return await res.json();
+      }
+    } catch (err) {
+      console.warn(`SQLite push to ${endpoint} failed:`, err);
+    }
+    return null;
+  }
+
+  async syncFullBundleToSqlite() {
+    const transactions = this.getTransactions();
+    const settings = this.getSettings();
+    const budgets = this.getAllBudgets();
+    return await this.pushToSqlite('/api/v1/db/sync', 'POST', {
+      transactions,
+      settings,
+      budgets
+    });
+  }
+
+  async resetSqliteDb() {
+    if (!this.isSqliteConnected) return false;
+    try {
+      const res = await fetch('/api/v1/db/reset', { method: 'POST' });
+      if (res.ok) {
+        await this.initSqliteConnection();
+        return true;
+      }
+    } catch (err) {
+      console.warn('Reset SQLite failed:', err);
+    }
+    return false;
   }
 
   // --- MULTI-USER AUTH & PROFILE ---
@@ -196,7 +341,7 @@ class StorageManager {
     }
   }
 
-  saveSettings(newSettings) {
+  saveSettings(newSettings, pushToBackend = true) {
     const user = this.getCurrentUser();
     const current = this.getSettings();
     const updated = { ...current, ...newSettings };
@@ -214,6 +359,10 @@ class StorageManager {
       }
     }
 
+    if (pushToBackend) {
+      this.pushToSqlite('/api/v1/settings', 'PUT', newSettings);
+    }
+
     return updated;
   }
 
@@ -229,7 +378,7 @@ class StorageManager {
     }
   }
 
-  saveCategories(categories) {
+  saveCategories(categories, pushToBackend = true) {
     const user = this.getCurrentUser();
     localStorage.setItem(this.getUserDataKey(user.id, 'categories'), JSON.stringify(categories));
   }
@@ -246,6 +395,7 @@ class StorageManager {
     }
     categories.push(category);
     this.saveCategories(categories);
+    this.pushToSqlite('/api/v1/categories', 'POST', category);
     return category;
   }
 
@@ -273,8 +423,10 @@ class StorageManager {
     if (!all[monthStr]) {
       all[monthStr] = { monthlyBudgetMinor: 0, categories: {} };
     }
-    all[monthStr].monthlyBudgetMinor = Math.max(0, parseInt(amountMinor, 10));
+    const val = Math.max(0, parseInt(amountMinor, 10));
+    all[monthStr].monthlyBudgetMinor = val;
     localStorage.setItem(this.getUserDataKey(user.id, 'budgets'), JSON.stringify(all));
+    this.pushToSqlite(`/api/v1/budgets/${monthStr}`, 'PUT', { amountMinor: val });
     return all[monthStr];
   }
 
@@ -287,12 +439,15 @@ class StorageManager {
     if (!all[monthStr].categories) {
       all[monthStr].categories = {};
     }
+    let val = 0;
     if (limitMinor === null || limitMinor === undefined) {
       delete all[monthStr].categories[categoryId];
     } else {
-      all[monthStr].categories[categoryId] = Math.max(0, parseInt(limitMinor, 10));
+      val = Math.max(0, parseInt(limitMinor, 10));
+      all[monthStr].categories[categoryId] = val;
     }
     localStorage.setItem(this.getUserDataKey(user.id, 'budgets'), JSON.stringify(all));
+    this.pushToSqlite(`/api/v1/budgets/${monthStr}/categories/${categoryId}`, 'PUT', { amountMinor: val });
     return all[monthStr];
   }
 
@@ -327,6 +482,7 @@ class StorageManager {
     };
     transactions.unshift(newTx);
     this.saveTransactions(transactions);
+    this.pushToSqlite('/api/v1/transactions', 'POST', newTx);
     return newTx;
   }
 
@@ -341,6 +497,7 @@ class StorageManager {
       updatedAt: new Date().toISOString()
     };
     this.saveTransactions(transactions);
+    this.pushToSqlite(`/api/v1/transactions/${id}`, 'PUT', updates);
     return transactions[idx];
   }
 
@@ -349,6 +506,7 @@ class StorageManager {
     const deletedTx = transactions.find(t => t.id === id);
     const updated = transactions.filter(t => t.id !== id);
     this.saveTransactions(updated);
+    this.pushToSqlite(`/api/v1/transactions/${id}`, 'DELETE');
     return deletedTx;
   }
 

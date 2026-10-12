@@ -42,10 +42,11 @@ def init_db():
     CREATE TABLE IF NOT EXISTS settings (
         id INTEGER PRIMARY KEY CHECK (id = 1),
         user_name TEXT DEFAULT 'Mohamad Aarish',
-        user_email TEXT DEFAULT 'mohamadaarish.m@budget.app',
+        user_email TEXT DEFAULT 'mohamadaarish.m@budgetnest.app',
         currency_code TEXT DEFAULT 'INR',
         currency_symbol TEXT DEFAULT '₹',
         week_start TEXT DEFAULT 'monday',
+        starting_balance_minor INTEGER DEFAULT 5000000,
         updated_at TEXT
     );
     """)
@@ -71,6 +72,7 @@ def init_db():
         amount_minor INTEGER NOT NULL CHECK (amount_minor > 0),
         created_at TEXT NOT NULL,
         updated_at TEXT,
+        user_id TEXT DEFAULT 'user_aarish',
         FOREIGN KEY (category_id) REFERENCES categories (id)
     );
     """)
@@ -94,21 +96,36 @@ def init_db():
     );
     """)
 
+    # Schema Migrations
+    try:
+        cur.execute("ALTER TABLE settings ADD COLUMN starting_balance_minor INTEGER DEFAULT 5000000;")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cur.execute("ALTER TABLE transactions ADD COLUMN user_id TEXT DEFAULT 'user_aarish';")
+    except sqlite3.OperationalError:
+        pass
+
+    # Update any legacy email domains
+    cur.execute("UPDATE users SET email = REPLACE(email, '@budget.app', '@budgetnest.app');")
+    cur.execute("UPDATE settings SET user_email = REPLACE(user_email, '@budget.app', '@budgetnest.app');")
+
     # Check if empty, seed defaults
     cur.execute("SELECT COUNT(*) as cnt FROM users;")
     if cur.fetchone()['cnt'] == 0:
         default_users = [
-            ('user_aarish', 'Mohamad Aarish', 'mohamadaarish.m@budget.app', 'password123', 'MA', datetime.utcnow().isoformat() + 'Z'),
-            ('user_sarah', 'Sarah Jenkins', 'sarah.j@budget.app', 'password123', 'SJ', datetime.utcnow().isoformat() + 'Z'),
-            ('user_priya', 'Priya Sharma', 'priya.s@budget.app', 'password123', 'PS', datetime.utcnow().isoformat() + 'Z')
+            ('user_aarish', 'Mohamad Aarish', 'mohamadaarish.m@budgetnest.app', 'password123', 'MA', datetime.utcnow().isoformat() + 'Z'),
+            ('user_sarah', 'Sarah Jenkins', 'sarah.j@budgetnest.app', 'password123', 'SJ', datetime.utcnow().isoformat() + 'Z'),
+            ('user_priya', 'Priya Sharma', 'priya.s@budgetnest.app', 'password123', 'PS', datetime.utcnow().isoformat() + 'Z')
         ]
         cur.executemany("INSERT INTO users (id, name, email, password, avatar, created_at) VALUES (?, ?, ?, ?, ?, ?);", default_users)
 
     cur.execute("SELECT COUNT(*) as cnt FROM settings;")
     if cur.fetchone()['cnt'] == 0:
         cur.execute("""
-        INSERT INTO settings (id, user_name, user_email, currency_code, currency_symbol, week_start, updated_at)
-        VALUES (1, 'Mohamad Aarish', 'mohamadaarish.m@budget.app', 'INR', '₹', 'monday', datetime('now'));
+        INSERT INTO settings (id, user_name, user_email, currency_code, currency_symbol, week_start, starting_balance_minor, updated_at)
+        VALUES (1, 'Mohamad Aarish', 'mohamadaarish.m@budgetnest.app', 'INR', '₹', 'monday', 5000000, datetime('now'));
         """)
 
     cur.execute("SELECT COUNT(*) as cnt FROM categories;")
@@ -224,13 +241,59 @@ class BudgetRequestHandler(SimpleHTTPRequestHandler):
             self.send_json(200, {"data": [dict(r) for r in rows]})
             return
 
-        # Settings
+        # Database Info: GET /api/v1/db/info
+        if path == '/api/v1/db/info':
+            conn = get_db()
+            cur = conn.cursor()
+            tables = ['users', 'settings', 'categories', 'transactions', 'monthly_budgets', 'category_budgets']
+            table_counts = {}
+            for t in tables:
+                try:
+                    cur.execute(f"SELECT COUNT(*) FROM {t};")
+                    table_counts[t] = cur.fetchone()[0]
+                except Exception:
+                    table_counts[t] = 0
+            cur.execute("SELECT sqlite_version();")
+            sql_ver = cur.fetchone()[0]
+            conn.close()
+
+            db_size = os.path.getsize(DB_FILE) if os.path.exists(DB_FILE) else 0
+            self.send_json(200, {
+                "data": {
+                    "status": "connected",
+                    "engine": f"SQLite {sql_ver}",
+                    "sqliteVersion": sql_ver,
+                    "databaseFile": DB_FILE,
+                    "databaseName": os.path.basename(DB_FILE),
+                    "filename": os.path.basename(DB_FILE),
+                    "sizeBytes": db_size,
+                    "size_bytes": db_size,
+                    "sizeFormatted": f"{db_size / 1024:.1f} KB",
+                    "tableCounts": table_counts,
+                    "stats": table_counts
+                }
+            })
+            return
+
+        # Settings: GET /api/v1/settings
         if path == '/api/v1/settings':
             conn = get_db()
             row = conn.execute("SELECT * FROM settings WHERE id = 1;").fetchone()
             conn.close()
             if row:
-                self.send_json(200, {"data": dict(row)})
+                d = dict(row)
+                self.send_json(200, {
+                    "data": {
+                        "id": d.get('id', 1),
+                        "userName": d.get('user_name', 'Mohamad Aarish'),
+                        "userEmail": d.get('user_email', 'mohamadaarish.m@budgetnest.app'),
+                        "currencyCode": d.get('currency_code', 'INR'),
+                        "currencySymbol": d.get('currency_symbol', '₹'),
+                        "weekStart": d.get('week_start', 'monday'),
+                        "startingBalanceMinor": d.get('starting_balance_minor', 5000000),
+                        "updatedAt": d.get('updated_at')
+                    }
+                })
             else:
                 self.send_api_error(404, "NOT_FOUND", "Settings not found")
             return
@@ -499,7 +562,7 @@ class BudgetRequestHandler(SimpleHTTPRequestHandler):
 
             conn = get_db()
             conn.execute("""
-            INSERT INTO transactions (id, date, description, category_id, type, amount_minor, created_at)
+            INSERT OR REPLACE INTO transactions (id, date, description, category_id, type, amount_minor, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?);
             """, (tx_id, date_str, description, category_id, tx_type, amount_minor, created_at))
             conn.commit()
@@ -516,6 +579,244 @@ class BudgetRequestHandler(SimpleHTTPRequestHandler):
                     "createdAt": created_at
                 }
             })
+            return
+
+        # Create Category: POST /api/v1/categories
+        if path == '/api/v1/categories':
+            body = self.read_json_body()
+            cat_id = (body.get('id') or '').strip().lower()
+            name = (body.get('name') or '').strip()
+            cat_type = body.get('type', 'expense')
+            icon = body.get('icon', '🏷️')
+            color = body.get('color', '#64748B')
+
+            if not cat_id or not name:
+                self.send_api_error(400, "VALIDATION_ERROR", "Category ID and name are required.")
+                return
+
+            conn = get_db()
+            try:
+                conn.execute("INSERT INTO categories (id, name, type, icon, color) VALUES (?, ?, ?, ?, ?);",
+                             (cat_id, name, cat_type, icon, color))
+                conn.commit()
+                conn.close()
+                self.send_json(201, {"data": {"id": cat_id, "name": name, "type": cat_type, "icon": icon, "color": color}})
+            except sqlite3.IntegrityError:
+                conn.close()
+                self.send_api_error(409, "CATEGORY_EXISTS", f"Category '{cat_id}' already exists.")
+            return
+
+        # Reset DB to reference seed: POST /api/v1/db/reset
+        if path == '/api/v1/db/reset':
+            conn = get_db()
+            cur = conn.cursor()
+            cur.execute("DELETE FROM transactions;")
+            cur.execute("DELETE FROM monthly_budgets;")
+            cur.execute("DELETE FROM category_budgets;")
+            cur.execute("DELETE FROM categories;")
+            cur.execute("DELETE FROM settings;")
+            cur.execute("DELETE FROM users;")
+            conn.commit()
+            conn.close()
+            init_db()
+            self.send_json(200, {"data": {"reset": True, "message": "SQLite database reset to October 2026 reference seed dataset"}})
+            return
+
+        # Full Sync from client to SQLite: POST /api/v1/db/sync
+        if path == '/api/v1/db/sync':
+            body = self.read_json_body()
+            txns = body.get('transactions', [])
+            settings_obj = body.get('settings', {})
+            budgets_obj = body.get('budgets', {})
+
+            conn = get_db()
+            cur = conn.cursor()
+
+            # Sync settings if provided
+            if settings_obj:
+                cur.execute("""
+                UPDATE settings
+                SET user_name = COALESCE(?, user_name),
+                    user_email = COALESCE(?, user_email),
+                    currency_code = COALESCE(?, currency_code),
+                    currency_symbol = COALESCE(?, currency_symbol),
+                    week_start = COALESCE(?, week_start),
+                    starting_balance_minor = COALESCE(?, starting_balance_minor),
+                    updated_at = datetime('now')
+                WHERE id = 1;
+                """, (
+                    settings_obj.get('userName'),
+                    settings_obj.get('userEmail'),
+                    settings_obj.get('currencyCode'),
+                    settings_obj.get('currencySymbol'),
+                    settings_obj.get('weekStart'),
+                    settings_obj.get('startingBalanceMinor')
+                ))
+
+            # Sync transactions (upsert)
+            for tx in txns:
+                tx_id = tx.get('id')
+                if not tx_id:
+                    continue
+                cur.execute("""
+                INSERT INTO transactions (id, date, description, category_id, type, amount_minor, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                ON CONFLICT(id) DO UPDATE SET
+                    date = excluded.date,
+                    description = excluded.description,
+                    category_id = excluded.category_id,
+                    type = excluded.type,
+                    amount_minor = excluded.amount_minor,
+                    updated_at = datetime('now');
+                """, (
+                    tx_id,
+                    tx.get('date'),
+                    tx.get('description'),
+                    tx.get('categoryId'),
+                    tx.get('type'),
+                    tx.get('amountMinor', 0),
+                    tx.get('createdAt', datetime.utcnow().isoformat() + 'Z')
+                ))
+
+            # Sync monthly budget
+            for month_key, b_data in budgets_obj.items():
+                mb_amt = b_data.get('monthlyBudgetMinor', 5000000)
+                cur.execute("""
+                INSERT INTO monthly_budgets (month, amount_minor, updated_at)
+                VALUES (?, ?, datetime('now'))
+                ON CONFLICT(month) DO UPDATE SET amount_minor = excluded.amount_minor, updated_at = datetime('now');
+                """, (month_key, mb_amt))
+
+                cat_limits = b_data.get('categories', {})
+                for cat_id, c_amt in cat_limits.items():
+                    cur.execute("""
+                    INSERT INTO category_budgets (month, category_id, amount_minor, updated_at)
+                    VALUES (?, ?, ?, datetime('now'))
+                    ON CONFLICT(month, category_id) DO UPDATE SET amount_minor = excluded.amount_minor, updated_at = datetime('now');
+                    """, (month_key, cat_id, c_amt))
+
+            conn.commit()
+            conn.close()
+            self.send_json(200, {"data": {"synced": True, "transactionCount": len(txns)}})
+            return
+
+        self.send_api_error(404, "NOT_FOUND", "Endpoint not found")
+
+    def do_PUT(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+
+        # Update Transaction: PUT /api/v1/transactions/:id
+        tx_match = re.match(r'^/api/v1/transactions/([^/]+)$', path)
+        if tx_match:
+            tx_id = tx_match.group(1)
+            body = self.read_json_body()
+            amount_minor = body.get('amountMinor')
+            tx_type = body.get('type')
+            category_id = body.get('categoryId')
+            date_str = body.get('date')
+            description = (body.get('description') or '').strip()
+
+            conn = get_db()
+            cur = conn.cursor()
+            cur.execute("""
+            UPDATE transactions
+            SET date = COALESCE(?, date),
+                description = COALESCE(?, description),
+                category_id = COALESCE(?, category_id),
+                type = COALESCE(?, type),
+                amount_minor = COALESCE(?, amount_minor),
+                updated_at = datetime('now')
+            WHERE id = ?;
+            """, (date_str, description, category_id, tx_type, amount_minor, tx_id))
+            updated = cur.rowcount > 0
+            conn.commit()
+            conn.close()
+
+            if updated:
+                self.send_json(200, {"data": {"id": tx_id, "updated": True}})
+            else:
+                self.send_api_error(404, "NOT_FOUND", f"Transaction '{tx_id}' not found")
+            return
+
+        # Update Category Budget: PUT /api/v1/budgets/:month/categories/:id
+        cat_budget_match = re.match(r'^/api/v1/budgets/(\d{4}-\d{2})/categories/([^/]+)$', path)
+        if cat_budget_match:
+            month = cat_budget_match.group(1)
+            category_id = cat_budget_match.group(2)
+            body = self.read_json_body()
+            amount_minor = body.get('amountMinor', 0)
+
+            conn = get_db()
+            conn.execute("""
+            INSERT INTO category_budgets (month, category_id, amount_minor, updated_at)
+            VALUES (?, ?, ?, datetime('now'))
+            ON CONFLICT(month, category_id) DO UPDATE SET amount_minor = excluded.amount_minor, updated_at = datetime('now');
+            """, (month, category_id, amount_minor))
+            conn.commit()
+            conn.close()
+            self.send_json(200, {"data": {"month": month, "categoryId": category_id, "amountMinor": amount_minor}})
+            return
+
+        # Update Monthly Budget: PUT /api/v1/budgets/:month
+        budget_match = re.match(r'^/api/v1/budgets/(\d{4}-\d{2})$', path)
+        if budget_match:
+            month = budget_match.group(1)
+            body = self.read_json_body()
+            amount_minor = body.get('amountMinor')
+            if amount_minor is None or amount_minor < 0:
+                self.send_api_error(400, "VALIDATION_ERROR", "amountMinor must be a positive integer.")
+                return
+
+            conn = get_db()
+            conn.execute("""
+            INSERT INTO monthly_budgets (month, amount_minor, updated_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(month) DO UPDATE SET amount_minor = excluded.amount_minor, updated_at = datetime('now');
+            """, (month, amount_minor))
+            conn.commit()
+            conn.close()
+            self.send_json(200, {"data": {"month": month, "monthlyBudgetMinor": amount_minor}})
+            return
+
+        # Update Settings: PUT /api/v1/settings
+        if path == '/api/v1/settings':
+            body = self.read_json_body()
+            user_name = body.get('userName')
+            user_email = body.get('userEmail')
+            currency_code = body.get('currencyCode')
+            currency_symbol = body.get('currencySymbol')
+            week_start = body.get('weekStart')
+            starting_balance_minor = body.get('startingBalanceMinor')
+
+            conn = get_db()
+            cur = conn.cursor()
+            cur.execute("""
+            UPDATE settings
+            SET user_name = COALESCE(?, user_name),
+                user_email = COALESCE(?, user_email),
+                currency_code = COALESCE(?, currency_code),
+                currency_symbol = COALESCE(?, currency_symbol),
+                week_start = COALESCE(?, week_start),
+                starting_balance_minor = COALESCE(?, starting_balance_minor),
+                updated_at = datetime('now')
+            WHERE id = 1;
+            """, (user_name, user_email, currency_code, currency_symbol, week_start, starting_balance_minor))
+            conn.commit()
+            row = cur.execute("SELECT * FROM settings WHERE id = 1;").fetchone()
+            conn.close()
+
+            d = dict(row)
+            self.send_json(200, {"data": {
+                "id": d.get('id', 1),
+                "userName": d.get('user_name'),
+                "userEmail": d.get('user_email'),
+                "currencyCode": d.get('currency_code'),
+                "currencySymbol": d.get('currency_symbol'),
+                "weekStart": d.get('week_start'),
+                "startingBalanceMinor": d.get('starting_balance_minor', 5000000),
+                "updatedAt": d.get('updated_at')
+            }})
             return
 
         self.send_api_error(404, "NOT_FOUND", "Endpoint not found")
@@ -539,6 +840,22 @@ class BudgetRequestHandler(SimpleHTTPRequestHandler):
                 self.send_json(200, {"data": {"id": tx_id, "deleted": True}})
             else:
                 self.send_api_error(404, "NOT_FOUND", f"Transaction '{tx_id}' not found")
+            return
+
+        # Delete/Archive Category: DELETE /api/v1/categories/:id
+        cat_match = re.match(r'^/api/v1/categories/([^/]+)$', path)
+        if cat_match:
+            cat_id = cat_match.group(1)
+            conn = get_db()
+            cur = conn.cursor()
+            cur.execute("DELETE FROM categories WHERE id = ?;", (cat_id,))
+            deleted = cur.rowcount > 0
+            conn.commit()
+            conn.close()
+            if deleted:
+                self.send_json(200, {"data": {"id": cat_id, "deleted": True}})
+            else:
+                self.send_api_error(404, "NOT_FOUND", f"Category '{cat_id}' not found")
             return
 
         self.send_api_error(404, "NOT_FOUND", "Endpoint not found")
